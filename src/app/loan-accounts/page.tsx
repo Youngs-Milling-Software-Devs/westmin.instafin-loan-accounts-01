@@ -6,6 +6,7 @@ import { useState, useTransition } from "react";
 import DatePicker from "@/components/DatePicker";
 import { ExcelDownloadLoansAccounts } from "@/lib/excel-download-loan-accounts";
 import { IDataItems, IDataSource } from "../_types";
+import { format } from "date-fns";
 
 const columnSchema: IColumSchema<IDataSource>[] = [
   { key: "counter", title: "Series No." },
@@ -22,12 +23,12 @@ const columnSchema: IColumSchema<IDataSource>[] = [
   {
     key: "obligatoryPaymentDate",
     title: "Obligatory Payment Date",
-    format: (value) => new Date(value?.toString() ?? "").toLocaleDateString(),
+    format: (value) =>
+      value ? format(new Date(value.toString()), "yyyy-MM-dd") : "",
   },
   {
     key: "initialPrincipalDue",
     title: "Initial Principal Due",
-    format: (value) => new Date(value?.toString() ?? "").toLocaleDateString(),
   },
   { key: "initialLoanAccountBalance", title: "Initial Loan Account Balance" },
   { key: "currentPenaltyAmount", title: "Current Penalty Amount" },
@@ -43,7 +44,7 @@ const columnSchema: IColumSchema<IDataSource>[] = [
     key: "repaidDate",
     title: "Repaid Date",
     format: (value) =>
-      value ? new Date(value?.toString()).toLocaleDateString() : "",
+      value ? format(new Date(value.toString()), "yyyy-MM-dd") : "",
   },
   { key: "isPrepayment", title: "isPrepayment" },
   {
@@ -56,7 +57,11 @@ const columnSchema: IColumSchema<IDataSource>[] = [
   { key: "paidPenalty", title: "Paid Penalty" },
   { key: "paidInterest", title: "Paid Interest" },
   { key: "instalmentGroupIndex", title: "Instalment Group Index" },
-  { key: "gracePeriodType", title: "Grace Period Type" },
+  {
+    key: "gracePeriodType",
+    title: "Grace Period Type",
+    format: (value) => (value ? value.toString() : ""),
+  },
   { key: "appliedSections", title: "Applied Sections" },
 
   { key: "clientLoanCycle", title: "Client Loan Cycle" },
@@ -80,7 +85,7 @@ const columnSchema: IColumSchema<IDataSource>[] = [
     key: "disbursementOn",
     title: "Disbursement On",
     format: (value) =>
-      value ? new Date(value?.toString()).toLocaleDateString() : "",
+      value ? format(new Date(value.toString()), "yyyy-MM-dd") : "",
   },
   {
     key: "effectiveInterestRate",
@@ -96,7 +101,7 @@ const columnSchema: IColumSchema<IDataSource>[] = [
   {
     key: "interestRate",
     title: "Interest Rate",
-    format: (value) => (value ? value.toString() : ""),
+    format: (value) => (value ? parseFloat(value.toString()).toFixed(3) : ""),
   },
   {
     key: "isLocked",
@@ -159,7 +164,7 @@ const columnSchema: IColumSchema<IDataSource>[] = [
     key: "automaticRepaymentEndDate",
     title: "Automatic Repayment End date",
     format: (value) =>
-      value ? new Date(value?.toString()).toLocaleDateString() : "",
+      value ? format(new Date(value.toString()), "yyyy-MM-dd") : "",
   },
   {
     key: "olbP",
@@ -190,12 +195,13 @@ const columnSchema: IColumSchema<IDataSource>[] = [
 ];
 
 export default function LoanAccountScreen() {
-  const [startDate, setStartDate] = useState(""); // state for start date
-  const [endDate, setEndDate] = useState(""); // state for end date
+  const [startDate, setStartDate] = useState("2000-01-01"); // state for start date
+  const [endDate, setEndDate] = useState(format(new Date(), "yyyy-MM-dd")); // state for end date
 
   const [dataSource, setDataSource] = useState<IDataSource[]>([]);
   const [isPending, startTransition] = useTransition();
   const [isLoading, setLoading] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   const handleFilterByDateRange = async (
     e: React.FormEvent<HTMLFormElement>,
@@ -203,6 +209,7 @@ export default function LoanAccountScreen() {
     e.preventDefault();
 
     try {
+      setDataSource([]);
       setLoading(true);
       const res = await fetch("/api/submit-instafin", {
         method: "POST",
@@ -369,10 +376,17 @@ export default function LoanAccountScreen() {
   };
 
   const handleExportToExcel = async () => {
-    await new ExcelDownloadLoansAccounts().generate({
-      dataSource,
-      columnSchema,
-    });
+    try {
+      setIsExporting(true);
+      await new ExcelDownloadLoansAccounts().generate({
+        dataSource,
+        columnSchema,
+      });
+    } catch (err) {
+      console.log("Exporting is error", err);
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   return (
@@ -409,7 +423,7 @@ export default function LoanAccountScreen() {
           />
 
           <div className="flex justify-center items-center w-full">
-            <Button mode="primary" isSubmitting={isPending || isLoading}>
+            <Button mode="primary" isSubmitting={isLoading || isPending}>
               Filter by Date Range
             </Button>
           </div>
@@ -419,12 +433,16 @@ export default function LoanAccountScreen() {
       <Table
         upperHeader={{
           title: "WestMin Loan Accounts",
-          buttonLabel: "Export",
-          onClick: handleExportToExcel,
+          buttonProps: {
+            isSubmitting: isExporting,
+            onClick: handleExportToExcel,
+            children: "Export",
+            mode: "success",
+          },
         }}
         dataSource={dataSource}
         columnSchema={columnSchema}
-        isFetchingDataSource={isPending}
+        isFetchingDataSource={isLoading || isPending}
       />
     </div>
   );

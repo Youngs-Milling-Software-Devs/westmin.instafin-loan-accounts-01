@@ -1,6 +1,6 @@
 import { FaFileExcel } from "react-icons/fa"; // Excel icon from react-icons
 import LoadingSpinner from "./LoadingSpinner";
-import Button from "./Button";
+import Button, { IButtonProps } from "./Button";
 
 export interface IColumSchema<T> {
   key: keyof T;
@@ -11,7 +11,7 @@ export interface ITableProps<T> {
   // Define any props if needed in the future
   dataSource: T[];
   columnSchema: IColumSchema<T>[];
-  upperHeader?: { title: string; buttonLabel: string; onClick: () => void };
+  upperHeader?: { title: string; buttonProps: IButtonProps };
   isFetchingDataSource?: boolean;
 }
 export default function Table<T>({
@@ -34,9 +34,13 @@ export default function Table<T>({
               {dataSource?.length}
             </span>
           </h2>
-          <Button onClick={upperHeader?.onClick} mode="success">
+          <Button
+            onClick={upperHeader?.buttonProps.onClick}
+            isSubmitting={upperHeader?.buttonProps.isSubmitting}
+            mode={upperHeader?.buttonProps.mode ?? "primary"}
+          >
             <FaFileExcel />
-            {upperHeader?.buttonLabel}
+            {upperHeader?.buttonProps.children}
           </Button>
         </div>
       </div>
@@ -74,13 +78,13 @@ export default function Table<T>({
               ))
             ) : isFetchingDataSource ? (
               <tr>
-                <td colSpan={columnSchema?.length} className="text-center py-4">
-                  <LoadingSpinner />
+                <td colSpan={columnSchema?.length} className="p-4">
+                  <LoadingSpinner name="fetching data..." />
                 </td>
               </tr>
             ) : (
               <tr>
-                <td colSpan={columnSchema?.length} className="text-center py-4">
+                <td colSpan={columnSchema?.length} className="p-4">
                   No data available
                 </td>
               </tr>

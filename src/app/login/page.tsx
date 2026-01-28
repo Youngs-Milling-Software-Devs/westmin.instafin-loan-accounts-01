@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { FaLockOpen } from "react-icons/fa";
 import cookie from "js-cookie";
+import Image from "next/image";
 
 export default function LoginScreen() {
   const [username, setUsername] = useState("");
@@ -17,6 +18,8 @@ export default function LoginScreen() {
 
     const USERNAME = process.env.NEXT_PUBLIC_DEFAULT_USERNAME;
     const PASSWORD = process.env.NEXT_PUBLIC_DEFAULT_PASSWORD;
+
+    console.log("credewntial", USERNAME, PASSWORD, "nputs", username, password);
 
     if (USERNAME === username && PASSWORD === password) {
       setUsername("");
@@ -31,49 +34,64 @@ export default function LoginScreen() {
     }
   };
   return (
-    <form
-      className="flex justify-center  w-screen h-screen items-center"
-      onSubmit={handleSubmit}
-    >
-      <div className="flex flex-col items-center justify-center min-h-screen">
-        <div className="w-full max-w-md bg-white rounded-xl shadow-lg border border-gray-200 p-10 flex flex-col gap-6">
+    <div className="w-screen h-screen relative">
+      {/* Top half blue */}
+      <div className="absolute top-0 left-0 w-full h-1/2 bg-blue-800"></div>
+
+      {/* Bottom half white (optional, since default is white) */}
+      <div className="absolute bottom-0 left-0 w-full h-1/2 bg-white"></div>
+
+      {/* Login form centered */}
+      <div className="relative z-10 flex items-center justify-center h-full">
+        <form
+          className="w-full max-w-md bg-white rounded-xl shadow-lg border border-gray-200"
+          onSubmit={handleSubmit}
+        >
           {/* Header */}
-          <h1 className="text-3xl font-bold text-amber-600 text-center">
-            WestMin Loan Accounts
-          </h1>
-          <p className="text-gray-500 text-center text-sm">
-            Sign in to your account to continue
-          </p>
 
-          {/* Username */}
-          <TextField
-            id="username"
-            type="text"
-            placeholder="Username"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-          />
+          <div className="p-10 flex flex-col gap-6">
+            <Image
+              className="w-full"
+              src="/westmin.png"
+              alt="Next.js logo"
+              width={1000}
+              height={1000}
+              priority
+            />
+            <p className="text-gray-500 text-center text-sm">
+              Sign in to your account to continue
+            </p>
 
-          {/* Password */}
-          <TextField
-            id="password"
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
+            {/* Username */}
+            <TextField
+              id="username"
+              type="text"
+              placeholder="Username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+            />
 
-          {/* Button */}
-          <Button mode="primary" type="submit">
-            <FaLockOpen /> Sign in
-          </Button>
+            {/* Password */}
+            <TextField
+              id="password"
+              type="password"
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
 
-          {/* Optional: footer */}
-          <div className="text-center text-sm text-gray-400 mt-2">
-            © 2026 WestMin Finance. All rights reserved.
+            {/* Button */}
+            <Button mode="primary" type="submit">
+              <FaLockOpen /> Sign in
+            </Button>
+
+            {/* Footer */}
+            <div className="text-center text-sm text-gray-400 mt-2">
+              © 2026 WestMin Finance. All rights reserved.
+            </div>
           </div>
-        </div>
+        </form>
       </div>
-    </form>
+    </div>
   );
 }

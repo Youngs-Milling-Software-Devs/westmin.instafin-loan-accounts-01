@@ -38,7 +38,9 @@ export class ExcelDownloadLoansAccounts {
         filterButton: true,
       })),
       rows: dataSource.map((source) =>
-        columnSchema.map((col) => source[col.key]),
+        columnSchema.map((col) =>
+          col?.format ? col.format(source[col.key]) : source[col.key],
+        ),
       ),
     });
 
