@@ -195,6 +195,7 @@ export default function LoanAccountScreen() {
 
   const [dataSource, setDataSource] = useState<IDataSource[]>([]);
   const [isPending, startTransition] = useTransition();
+  const [isLoading, setLoading] = useState(false);
 
   const handleFilterByDateRange = async (
     e: React.FormEvent<HTMLFormElement>,
@@ -202,6 +203,7 @@ export default function LoanAccountScreen() {
     e.preventDefault();
 
     try {
+      setLoading(true);
       const res = await fetch("/api/submit-instafin", {
         method: "POST",
         headers: {
@@ -361,6 +363,8 @@ export default function LoanAccountScreen() {
     } catch (err) {
       console.log("Filter date range", err);
       throw err;
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -405,7 +409,7 @@ export default function LoanAccountScreen() {
           />
 
           <div className="flex justify-center items-center w-full">
-            <Button mode="primary" isSubmitting={isPending}>
+            <Button mode="primary" isSubmitting={isPending || isLoading}>
               Filter by Date Range
             </Button>
           </div>
