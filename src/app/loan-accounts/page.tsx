@@ -29,17 +29,24 @@ const columnSchema: IColumSchema<IDataSource>[] = [
   {
     key: "initialPrincipalDue",
     title: "Initial Principal Due",
+    format: (value) => parseFloat(value?.toString() || "0").toFixed(5),
   },
   { key: "initialLoanAccountBalance", title: "Initial Loan Account Balance" },
   { key: "currentPenaltyAmount", title: "Current Penalty Amount" },
   { key: "currentFeeAmount", title: "Current Fee Amount" },
-  { key: "currentPrincipalDue", title: "Current Principal Due" },
+  {
+    key: "currentPrincipalDue",
+    title: "Current Principal Due",
+    format: (value) => parseFloat(value?.toString() || "0").toFixed(5),
+  },
   {
     key: "ownInstalmentInterest",
     title: "Own Instalment Interest",
-    format: (value) => parseFloat(value?.toString() || "0").toFixed(5),
   },
-  { key: "currentInterestDue", title: "Current Interest Due" },
+  {
+    key: "currentInterestDue",
+    title: "Current Interest Due",
+  },
   {
     key: "repaidDate",
     title: "Repaid Date",
@@ -50,7 +57,6 @@ const columnSchema: IColumSchema<IDataSource>[] = [
   {
     key: "scheduledInterest",
     title: "Scheduled Interest",
-    format: (value) => parseFloat(value?.toString() || "0").toFixed(5),
   },
 
   { key: "paidFee", title: "Paid Fee" },
@@ -90,7 +96,6 @@ const columnSchema: IColumSchema<IDataSource>[] = [
   {
     key: "effectiveInterestRate",
     title: "Effective Interest Rate",
-    format: (value) => (value ? value.toString() : ""),
   },
 
   {
@@ -402,7 +407,7 @@ export default function LoanAccountScreen() {
             priority
           />
           <h1 className=" text-amber-500 font-semibold text-lg uppercase tracking-wider">
-            Molave Youngs Milling Corporation
+            WestMin Lending Corporation
           </h1>
         </div>
 
@@ -432,7 +437,7 @@ export default function LoanAccountScreen() {
 
       <Table
         upperHeader={{
-          title: "WestMin Loan Accounts",
+          title: "Loan Accounts",
           buttonProps: {
             isSubmitting: isExporting,
             onClick: handleExportToExcel,

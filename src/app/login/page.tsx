@@ -19,8 +19,6 @@ export default function LoginScreen() {
     const USERNAME = process.env.NEXT_PUBLIC_DEFAULT_USERNAME;
     const PASSWORD = process.env.NEXT_PUBLIC_DEFAULT_PASSWORD;
 
-    console.log("credewntial", USERNAME, PASSWORD, "nputs", username, password);
-
     if (USERNAME === username && PASSWORD === password) {
       setUsername("");
       setPassword("");
