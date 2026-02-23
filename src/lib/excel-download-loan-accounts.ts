@@ -1,6 +1,6 @@
 "use client";
 
-import { IDataSource } from "@/app/_types";
+import { IDataSource } from "@/_types";
 import { IColumSchema } from "@/components/Table";
 import { Workbook } from "exceljs";
 

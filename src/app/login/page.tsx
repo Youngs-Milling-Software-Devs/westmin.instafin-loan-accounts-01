@@ -9,24 +9,20 @@ import cookie from "js-cookie";
 import Image from "next/image";
 
 export default function LoginScreen() {
-  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const navigation = useRouter();
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
-    const USERNAME = process.env.NEXT_PUBLIC_DEFAULT_USERNAME;
     const PASSWORD = process.env.NEXT_PUBLIC_DEFAULT_PASSWORD;
 
-    if (USERNAME === username && PASSWORD === password) {
-      setUsername("");
+    if (PASSWORD === password) {
       setPassword("");
       alert("Successfully sign in..");
       navigation.push("/loan-accounts");
       cookie.set("flag", "true", { expires: 7, secure: true });
     } else {
-      setUsername("");
       setPassword("");
       alert("Username and password are incorrect");
     }
@@ -59,15 +55,6 @@ export default function LoginScreen() {
             <p className="text-gray-500 text-center text-sm">
               Sign in to your account to continue
             </p>
-
-            {/* Username */}
-            <TextField
-              id="username"
-              type="text"
-              placeholder="Username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-            />
 
             {/* Password */}
             <TextField

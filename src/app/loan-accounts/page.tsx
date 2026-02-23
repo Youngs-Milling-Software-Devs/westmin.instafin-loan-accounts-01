@@ -1,12 +1,16 @@
 "use client";
 import Button from "@/components/Button";
 import Table, { IColumSchema } from "@/components/Table";
-import Image from "next/image";
-import { useState, useTransition } from "react";
+
+import { useEffect, useMemo, useRef, useState } from "react";
 import DatePicker from "@/components/DatePicker";
 import { ExcelDownloadLoansAccounts } from "@/lib/excel-download-loan-accounts";
-import { IDataItems, IDataSource } from "../_types";
+import { IDataItems, IDataSource } from "../../_types";
 import { format } from "date-fns";
+import { loanAccountsEffects } from "@/store/features/loan-accounts/loan-accounts.effects";
+import { AppDispatch, store } from "@/store";
+import { useDispatch } from "react-redux";
+import { loanAccountSelector } from "@/store/features/loan-accounts/loan-accounts.selector";
 
 const columnSchema: IColumSchema<IDataSource>[] = [
   { key: "counter", title: "Series No." },
@@ -29,7 +33,7 @@ const columnSchema: IColumSchema<IDataSource>[] = [
   {
     key: "initialPrincipalDue",
     title: "Initial Principal Due",
-    format: (value) => parseFloat(value?.toString() || "0").toFixed(5),
+    format: (value) => parseFloat(value?.toString() || "0"),
   },
   { key: "initialLoanAccountBalance", title: "Initial Loan Account Balance" },
   { key: "currentPenaltyAmount", title: "Current Penalty Amount" },
@@ -37,7 +41,7 @@ const columnSchema: IColumSchema<IDataSource>[] = [
   {
     key: "currentPrincipalDue",
     title: "Current Principal Due",
-    format: (value) => parseFloat(value?.toString() || "0").toFixed(5),
+    format: (value) => parseFloat(value?.toString() || "0"),
   },
   {
     key: "ownInstalmentInterest",
@@ -106,7 +110,11 @@ const columnSchema: IColumSchema<IDataSource>[] = [
   {
     key: "interestRate",
     title: "Interest Rate",
-    format: (value) => (value ? parseFloat(value.toString()).toFixed(3) : ""),
+    format: (value) => {
+      if (!value) return "";
+      const num = parseFloat(value.toString());
+      return isNaN(num) ? 0 : num;
+    },
   },
   {
     key: "isLocked",
@@ -117,17 +125,15 @@ const columnSchema: IColumSchema<IDataSource>[] = [
   {
     key: "loanAmount",
     title: "Loan Amount",
-    format: (value) => (value ? value.toString() : ""),
+    format: (value) => (value ? parseFloat(value.toString()) : 0),
   },
   {
     key: "loanProductExternalId",
     title: "Loan Product External ID",
-    format: (value) => (value ? value.toString() : ""),
   },
   {
     key: "loanProductId",
     title: "Loan Product ID",
-    format: (value) => (value ? value.toString() : ""),
   },
   {
     key: "loanPurpose",
@@ -137,17 +143,14 @@ const columnSchema: IColumSchema<IDataSource>[] = [
   {
     key: "numberOfInstalments",
     title: "Number Of Instalments",
-    format: (value) => (value ? value.toString() : ""),
   },
   {
     key: "upToDateInstalments",
     title: "Up To Date Instalments",
-    format: (value) => (value ? value.toString() : ""),
   },
   {
     key: "userDefinedInterestRate",
     title: "User Defined Interest Rate",
-    format: (value) => (value ? value.toString() : ""),
   },
   {
     key: "userDefinedAddOnRate",
@@ -174,17 +177,14 @@ const columnSchema: IColumSchema<IDataSource>[] = [
   {
     key: "olbP",
     title: "olbP",
-    format: (value) => (value ? value.toString() : ""),
   },
   {
     key: "olbI",
     title: "olbI",
-    format: (value) => (value ? value.toString() : ""),
   },
   {
     key: "deviationLevel",
     title: "Deviation Level",
-    format: (value) => (value ? value.toString() : ""),
   },
   {
     key: "pendingOperationOn",
@@ -195,7 +195,6 @@ const columnSchema: IColumSchema<IDataSource>[] = [
   {
     key: "outstandingTotal",
     title: "Outstanding Total",
-    format: (value) => (value ? value.toString() : ""),
   },
 ];
 
@@ -203,10 +202,61 @@ export default function LoanAccountScreen() {
   const [startDate, setStartDate] = useState("2000-01-01"); // state for start date
   const [endDate, setEndDate] = useState(format(new Date(), "yyyy-MM-dd")); // state for end date
 
-  const [dataSource, setDataSource] = useState<IDataSource[]>([]);
-  const [isPending, startTransition] = useTransition();
   const [isLoading, setLoading] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const dispatch = useDispatch<AppDispatch>();
+
+  const workerRef = useRef<Worker | null>(null);
+  const accumulatedDataRef = useRef<IDataSource[]>([]);
+  const totalChunksRef = useRef(0);
+  const completedChunksRef = useRef(0);
+  const [fullData, setFullData] = useState<IDataSource[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50); // 50 rows per page
+
+  const paginatedData = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    const end = start + pageSize;
+    return fullData.slice(start, end);
+  }, [fullData, currentPage, pageSize]);
+
+  useEffect(() => {
+    workerRef.current = new Worker(
+      new URL("./../../lib/loan-worker.ts", import.meta.url),
+    );
+
+    workerRef.current.onmessage = (event) => {
+      const { processed } = event.data;
+
+      // accumulate results
+      accumulatedDataRef.current = [
+        ...accumulatedDataRef.current,
+        ...processed,
+      ];
+
+      completedChunksRef.current += 1;
+
+      // when all chunks are done
+      if (completedChunksRef.current === totalChunksRef.current) {
+        setFullData(accumulatedDataRef.current);
+        setLoading(false);
+
+        // reset counters
+        accumulatedDataRef.current = [];
+        completedChunksRef.current = 0;
+        totalChunksRef.current = 0;
+      }
+    };
+
+    workerRef.current.onerror = (error) => {
+      console.error("Worker error:", error);
+      setLoading(false);
+    };
+
+    return () => {
+      workerRef.current?.terminate();
+    };
+  }, []);
 
   const handleFilterByDateRange = async (
     e: React.FormEvent<HTMLFormElement>,
@@ -214,164 +264,42 @@ export default function LoanAccountScreen() {
     e.preventDefault();
 
     try {
-      setDataSource([]);
+      setFullData([]);
       setLoading(true);
-      const res = await fetch("/api/submit-instafin", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
+
+      await dispatch(
+        loanAccountsEffects({
           startDate,
           endDate,
         }),
-      });
+      );
 
-      const data = (await res.json()) as {
-        items: IDataItems[];
-        message: string;
-      };
+      const { loanAccounts } = loanAccountSelector(store.getState());
 
-      if (!data?.items?.length) {
-        const [error] = data as unknown as [{ message: string }];
+      if (!loanAccounts) {
+        const [error] = loanAccounts as unknown as [{ message: string }];
         alert(`Error Response: ${error.message}`);
         return;
       }
 
-      const { items } = data;
+      const { items } = loanAccounts as unknown as { items: IDataItems[] };
 
-      const dataSource: IDataSource[] = [];
-      for (const element of items) {
-        const {
-          account,
-          client,
-          loanInstalments,
-          clientLoanCycle,
-          deposit,
-          loan,
-        } = element;
+      const CHUNK_SIZE = 5000;
 
-        if (loanInstalments?.length) {
-          loanInstalments.forEach((loanInstalment, index) => {
-            dataSource.push({
-              counter: index + 1,
-              approvedOn: client.approvedOn,
-              branchName: client.branchName,
-              clientID: account.clientId,
+      // reset before sending
+      accumulatedDataRef.current = [];
+      completedChunksRef.current = 0;
 
-              // Client information
-              clientStatus: client.clientStatus,
-              clientType: client.clientType,
-              createdOn: client.createdOn,
-              name: client.name,
-              accountId: account.accountId,
-              accountExternalId: account.accountExternalId,
-              accountTypeId: account.accountTypeId,
-              clientId: account.clientId,
-              clientExternalId: account.clientExternalId,
-              clientName: account.clientName,
-              productExternalId: account.productExternalId,
-              productName: account.productName,
-              accountTypeName: account.accountTypeName,
-              accountStatusName: account.accountStatusName,
-              clientTypeName: account.clientTypeName,
-              productType: account.productType,
+      totalChunksRef.current = Math.ceil(items.length / CHUNK_SIZE);
 
-              // Loan Installment
-              id: loanInstalment.id,
-              URI: loanInstalment.URI,
-              obligatoryPaymentDate: loanInstalment.obligatoryPaymentDate,
-              lastPenaltyCalculationDate:
-                loanInstalment.lastPenaltyCalculationDate,
-              initialPrincipalDue: loanInstalment.initialPrincipalDue,
-              initialLoanAccountBalance:
-                loanInstalment.initialLoanAccountBalance,
-              currentPenaltyAmount: loanInstalment.currentPenaltyAmount,
-              currentPenaltyAmounts: [],
-              currentFeeAmount: loanInstalment.currentFeeAmount,
-              currentFeeAmounts: [],
-              currentPrincipalDue: loanInstalment.currentPrincipalDue,
-              ownInstalmentInterest: loanInstalment.ownInstalmentInterest,
-              currentInterestDue: loanInstalment.currentInterestDue,
-              statusId: 0,
-              repaidDate: loanInstalment.repaidDate,
-              isPrepayment: loanInstalment.isPrepayment,
-              isObliterated: loanInstalment.isObliterated,
-              isSkipped: loanInstalment.isSkipped,
-              isZeroth: loanInstalment.isZeroth,
-              isNonPay: loanInstalment.isNonPay,
-              interestRoundingError: loanInstalment.interestRoundingError,
-              capitalizedInterestRoundingError:
-                loanInstalment.capitalizedInterestRoundingError,
-              ownScheduledInterest: loanInstalment.ownInstalmentInterest,
-              scheduledInterest: loanInstalment.scheduledInterest,
-              propagatedScheduledInterestError:
-                loanInstalment.propagatedScheduledInterestError,
-              paidFee: loanInstalment.paidFee,
-              paidPenalty: loanInstalment.paidPenalty,
-              paidInterest: loanInstalment.paidInterest,
-              instalmentGroupIndex: loanInstalment.instalmentGroupIndex,
-              gracePeriodType: loanInstalment.gracePeriodType,
-              appliedSections: loanInstalment.appliedSections,
-              modifiedAt: loanInstalment.modifiedAt,
-              clientLoanCycle,
-              deposit,
+      for (let i = 0; i < items.length; i += CHUNK_SIZE) {
+        const chunkIndex = i / CHUNK_SIZE;
 
-              // loans
-              accountClassification: loan.accountClassification,
-              accountStatus: loan.accountStatus,
-              daysInArrears: loan.daysInArrears,
-              disbursementOn: loan.disbursementOn,
-              effectiveInterestRate: loan.effectiveInterestRate,
-              initialisedForClientUseOn: loan.initialisedForClientUseOn,
-              interestAccrualStrategy: loan.interestAccrualStrategy,
-              interestRate: loan.interestRate,
-              isLocked: loan.isLocked,
-              isRestructured: loan.isRestructured,
-              lastActionOccurredOn: loan.lastActionOccurredOn,
-              loanAmount: loan.loanAmount,
-              loanProductExternalId: loan.loanProductExternalId,
-              loanProductId: loan.loanProductId,
-              loanPurpose: loan.loanPurpose,
-              numberOfInstalments: loan.numberOfInstalments,
-              organisationTreePath: loan.organisationTreePath,
-              scheduleStartDate: loan.scheduleStartDate,
-              secondInstalmentDate: loan.secondInstalmentDate,
-              statusChangedOn: loan.statusChangedOn,
-              tentativeDisbursementDate: loan.tentativeDisbursementDate,
-              upToDateInstalments: loan.upToDateInstalments,
-              userDefinedInterestRate: loan.userDefinedInterestRate,
-              userDefinedAddOnRate: loan.userDefinedAddOnRate,
-              gracePeriodNumberOfInstalmentIntervals:
-                loan.gracePeriodNumberOfInstalmentIntervals,
-              payInstalments: loan.payInstalments,
-              typeOfBusiness: loan.typeOfBusiness,
-              economicActivity: loan.economicActivity,
-              debtCapacity: loan.debtCapacity,
-              workingCapital: loan.workingCapital,
-              otherFinancingLendingName: loan.otherFinancingLendingName,
-              otherLoanMonthlyInstalment: loan.otherLoanMonthlyInstalment,
-              otherLoanTermMonths: loan.otherLoanTermMonths,
-              otherLoanRemainingTermMonths: loan.otherLoanRemainingTermMonths,
-              applicationType: loan.applicationType,
-              deviation: loan.deviation,
-              multiplierForCalculation: loan.multiplierForCalculation,
-              requiredDepositBalance: loan.requiredDepositBalance,
-              automaticRepayment: loan.automaticRepayment,
-              automaticRepaymentEndDate: loan.automaticRepaymentEndDate,
-              olbP: loan.olbP,
-              olbI: loan.olbI,
-              deviationLevel: loan.deviationLevel,
-              pendingOperationOn: loan.pendingOperationOn,
-              outstandingTotal: loan.outstandingTotal,
-            });
-          });
-        }
+        workerRef.current?.postMessage({
+          items: items.slice(i, i + CHUNK_SIZE),
+          chunkIndex,
+        });
       }
-
-      startTransition(() => {
-        setDataSource(dataSource);
-      });
     } catch (err) {
       console.log("Filter date range", err);
       throw err;
@@ -384,7 +312,7 @@ export default function LoanAccountScreen() {
     try {
       setIsExporting(true);
       await new ExcelDownloadLoansAccounts().generate({
-        dataSource,
+        dataSource: fullData,
         columnSchema,
       });
     } catch (err) {
@@ -397,18 +325,19 @@ export default function LoanAccountScreen() {
   return (
     <div className="m-10 overflow-hidden">
       <div className="flex justify-between">
-        <div className="flex justify-center items-center gap-4">
-          <Image
-            className="dark:invert"
-            src="/globe.svg"
-            alt="Next.js logo"
-            width={40}
-            height={20}
-            priority
-          />
-          <h1 className=" text-amber-500 font-semibold text-lg uppercase tracking-wider">
+        {/* <div className="flex justify-center items-center gap-4">
+          <h1 className=" text-amber-500 font-semibold text-4xl uppercase tracking-wider">
             WestMin Lending Corporation
           </h1>
+        </div> */}
+        {/* Title Section */}
+        <div>
+          <h1 className="text-2xl lg:text-3xl font-bold text-gray-800 tracking-tight">
+            WestMin Lending Corporation
+          </h1>
+          <p className="text-sm text-gray-500 mt-1">
+            Filter records by date range
+          </p>
         </div>
 
         <form onSubmit={handleFilterByDateRange} className="flex space-x-4">
@@ -428,8 +357,8 @@ export default function LoanAccountScreen() {
           />
 
           <div className="flex justify-center items-center w-full">
-            <Button mode="primary" isSubmitting={isLoading || isPending}>
-              Filter by Date Range
+            <Button mode="primary" isSubmitting={isLoading}>
+              Apply Filter
             </Button>
           </div>
         </form>
@@ -445,9 +374,16 @@ export default function LoanAccountScreen() {
             mode: "success",
           },
         }}
-        dataSource={dataSource}
+        dataSource={paginatedData}
         columnSchema={columnSchema}
-        isFetchingDataSource={isLoading || isPending}
+        isFetchingDataSource={isLoading}
+        paginationProps={{
+          currentPage,
+          pageSize,
+          totalItems: fullData.length,
+          onPageChange: setCurrentPage,
+          onPageSizeChange: setPageSize,
+        }}
       />
     </div>
   );
